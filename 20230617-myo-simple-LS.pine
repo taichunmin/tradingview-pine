@@ -1,0 +1,131 @@
+//@version=5
+// ©Myo_Pionex
+strategy(
+ title                  =   "Ｍyo_simple strategy_LS",
+ shorttitle             =   "Myo_LS",
+ overlay                =   true,
+ max_lines_count        =   500,
+ max_labels_count       =   500,
+ precision              =   3,
+ default_qty_type       =   strategy.cash,
+ commission_value       =   0.05,
+ commission_type        =   strategy.commission.percent,
+ slippage               =   0,
+ currency               =   currency.USD,
+ default_qty_value      =   100,
+ initial_capital        =   100)
+
+
+// var
+
+lowest_price = ta.lowest(low, 200)
+highest_price = ta.highest(high, 200)
+min_800 = ta.lowest(low, 800)
+max_800 = ta.highest(high, 800)
+tp_target_L = min_800 + (max_800 - min_800) * math.rphi
+tp_target_S = max_800 - (max_800 - min_800) * math.rphi
+sl_L = lowest_price * (1 - 0.005)
+sl_S = highest_price * (1 + 0.005)
+rrr_L = tp_target_L - sl_L / sl_L
+rrr_S = ta.lowest(low, 800) + ta.highest(high, 800) - ta.lowest(low, 800) * math.rphi / ta.highest(high, 200) + 0.005 * ta.highest(high, 200) - ta.lowest(low, 200) - 0.005 * ta.lowest(low, 200)
+int share_number = input.int (3, "number of shares")
+
+
+smalen1 = input.int(10, "SmaLength1", options = [5, 10, 20, 40, 60, 80])
+smalen2 = input.int(20, "SmaLength2", options = [5, 10, 20, 40, 60, 80])
+smalen1_S = input.int(5, "SmaLength1_S", options = [5, 10, 20, 40, 60, 80])
+smalen2_S = input.int(10, "SmaLength2_S", options = [5, 10, 20, 40, 60, 80])
+TrendLength_L = input.int(200, "TrendLength_L", options = [100, 200, 300])
+TrendLength_S = input.int(100, "TrendLength_S", options = [100, 200, 300])
+SMA1 = ta.sma(close, smalen1)
+SMA2 = ta.sma(close, smalen2)
+SMA1_S = ta.sma(close, smalen1_S)
+SMA2_S = ta.sma(close, smalen2_S)
+
+//Ichimoku
+basePeriods = input.int(26, minval=1, title="Base Line Length")
+donchian(len) => math.avg(ta.lowest(len), ta.highest(len))
+baseLine = donchian(basePeriods)
+plot(baseLine, color=#B71C1C, title="Base Line")
+
+
+// Trend
+trend = request.security(syminfo.tickerid, "D", baseLine)
+isUptrend = false
+isDowntrend = false
+if close[0] > baseLine
+    isUptrend := true
+if close[0] < baseLine
+    isDowntrend := true
+// Long
+// Condition
+// entry
+con_a = low > lowest_price ? 1 : 0
+con_b = high > highest_price ? 1 : 0
+con_c = close[0] > ta.sma(close, TrendLength_L) ? 1 : 0
+con_d = isUptrend ? 1 : 0
+con_e = rrr_L > 3 ? 1 : 0
+
+// close
+con_f = close < SMA1 and close < SMA2 ? 1 : 0
+con_g = close < ta.lowest(low, 200)[1] * (1 - 0.005) ? 1 : 0
+
+// exit
+con_h = tp_target_L
+
+// Main calculation
+LongOpen = false
+AddPosition_L = false
+
+if con_a + con_b + con_c + con_d + con_e >= 4
+    LongOpen := true
+
+// Short
+// Condition
+// entry
+con_1 = high < highest_price ? 1 : 0
+con_2 = low < lowest_price ? 1 : 0
+con_3 = close[0] < ta.sma(close, TrendLength_S) ? 1 : 0
+con_4 = isDowntrend ? 1 : 0
+con_5 = rrr_S > 3 ? 1 : 0
+
+// close
+con_6 = close > SMA1_S and close > SMA2_S ? 1 : 0
+con_7 = close > ta.highest(high, 200)[1] * (1 + 0.005) ? 1 : 0
+
+// exit
+con_8 = tp_target_S
+
+// Main calculation
+ShortOpen = false
+AddPosition_S = false
+
+if con_1 + con_2 + con_3 + con_4 + con_5 >= 4
+    ShortOpen := true
+
+//
+// execute
+//
+if strategy.position_size == 0
+    if LongOpen
+        strategy.entry("Long Open" , strategy.long , comment= "Long Open " + str.tostring(close[0]), qty=strategy.initial_capital/close[0])
+
+if strategy.position_size > 0
+    if con_h > 0
+        strategy.exit("TP", comment="TP" + str.tostring(close[0]), qty=strategy.initial_capital*(1/share_number)/close[0], limit = tp_target_L)
+    if con_f > 0 or con_g > 0
+        strategy.close_all(comment="Close Long " + str.tostring(close[0]))
+
+if strategy.position_size == 0
+    if ShortOpen
+        strategy.entry("Short Open" , strategy.short , comment= "Short Open " + str.tostring(close[0]), qty=strategy.initial_capital/close[0])
+
+if strategy.position_size < 0
+    if con_8 > 0
+        strategy.exit("TP", comment="TP" + str.tostring(close[0]), qty=strategy.initial_capital*(1/share_number)/close[0], limit = tp_target_S)
+    if con_6 > 0 or con_7 > 0
+        strategy.close_all(comment="Close Long " + str.tostring(close[0]))
+
+
+plot(ta.sma(close, TrendLength_L), color=#e5c212, title="LTradeTrend")
+plot(ta.sma(close, TrendLength_S), color=#1275e5, title="STradeTrend")
