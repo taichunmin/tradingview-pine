@@ -1,0 +1,126 @@
+//@version=5
+// 假突破策略
+// 當偵測到假突破時進場，勝率50%以上
+//
+// 盈利因子大於1.8
+// 最大回撤17.63%
+// 運行一年收益50%以上
+//
+// 建議運行週期：1小時
+// @ Myo_Pionex
+strategy(
+ title                  =   "Omega Turtle Soup",
+ shorttitle             =   "Omega Turtle Soup",
+ overlay                =   true,
+ currency               =   currency.USDT,
+ default_qty_value      =   100,
+ initial_capital        =   100)
+//
+//
+// Var
+midlength = input.int   (60, "Mid Length")
+longlength = input.int   (120, "Long Length")
+MidAVG = math.sum(close, midlength) / midlength
+LongAVG = math.sum(close, longlength) / longlength
+lookback = input(60, title="Lookback Period")
+threshold = input(1, title="Threshold for fake breakouts")
+lowest_price = ta.lowest(low, 200)
+highest_price = ta.highest(high, 200)
+min_800 = ta.lowest(low, 800)
+max_800 = ta.highest(high, 800)
+tp_target_L = min_800 + (max_800 - min_800) * math.rphi
+tp_target_S = max_800 - (max_800 - min_800) * math.rphi
+BarsCount = input.int(800, "BarsCount", options = [20, 200, 400, 800, 1200, 2000])
+int share = input.int (2, "shares", options = [1, 2, 3])
+smalen1 = input.int(20, "SmaLength1", options = [5, 10, 20, 40, 60, 80])
+smalen2 = input.int(40, "SmaLength2", options = [5, 10, 20, 40, 60, 80])
+smalen1_S = input.int(20, "SmaLength1_S", options = [5, 10, 20, 40, 60, 80])
+smalen2_S = input.int(40, "SmaLength2_S", options = [5, 10, 20, 40, 60, 80])
+SMA1 = ta.sma(close, smalen1)
+SMA2 = ta.sma(close, smalen2)
+SMA1_S = ta.sma(close, smalen1_S)
+SMA2_S = ta.sma(close, smalen2_S)
+SupCoefficient = input.float(0.98, "SupC", minval = 0.8, maxval = 0.99, step = 0.01)
+ResCoefficient = input.float(1.02, "ResC", minval = 1.01, maxval = 1.2, step = 0.01)
+LHlength = input.int(500, "LHLength", options = [100, 200, 300, 400, 500, 600, 700, 800])
+LowestAVG = (ta.lowest(low, LHlength)[5] + ta.lowest(low, LHlength)[4] + ta.lowest(low, LHlength)[3] + ta.lowest(low, LHlength)[2] + ta.lowest(low, LHlength)[1]) / 5 * SupCoefficient
+HighestAVG = (ta.highest(high, LHlength)[5] + ta.highest(high, LHlength)[4] + ta.highest(high, LHlength)[3] + ta.highest(high, LHlength)[2] + ta.highest(high, LHlength)[1]) / 5 * ResCoefficient
+sl_L = ta.lowest(low, BarsCount)[2] * SupCoefficient * SupCoefficient
+sl_S = ta.highest(high, BarsCount)[2] * ResCoefficient * ResCoefficient
+rrr_L = tp_target_L - sl_L / sl_L
+rrr_S = sl_S - tp_target_S / sl_S
+//
+//
+Support = LowestAVG
+Resistance = HighestAVG
+//
+//
+// Conitioin
+// Long Open
+con_1 = ta.lowest(low, BarsCount)[2] <= LowestAVG and ta.lowest(low, BarsCount)[1] >= LowestAVG ? 1 : 0
+con_2 = rrr_L > 3 ? 1 : 0
+con_11 = ta.crossover(ta.sma(close[40], 200), ta.sma(close, 200)) ? 1 : 0
+con_12 = ta.crossover(MidAVG, LongAVG) ? 1 : 0
+LongOpen = false
+if con_1 + con_11 >= 1 and con_2 >= 1
+    LongOpen := true
+// Add Position Long
+AddPositionL = close[0] > MidAVG ? 1 : 0
+// Short Open
+con_a = ta.highest(high, BarsCount)[2] >= HighestAVG and ta.highest(high, BarsCount)[1] <= HighestAVG ? 1 : 0
+con_b = rrr_L > 3 ? 1 : 0
+con_a1 = ta.crossunder(ta.sma(close[40], 200), ta.sma(close, 200)) ? 1 : 0
+con_a2 = ta.crossunder(MidAVG, LongAVG) ? 1 : 0
+ShortOpen = false
+if con_a + con_a1 >= 1 and con_b >=1
+    ShortOpen := true
+// Add Position Long
+AddPositionS = close[0] < MidAVG ? 1 : 0
+// Long exit
+con_3 = tp_target_L
+// Long close
+con_4 = ta.crossunder(MidAVG, LongAVG) or ShortOpen ? 1 : 0
+con_5 = close < sl_L ? 1 : 0
+//
+// Short exit
+con_c = tp_target_S
+// Short close
+con_d = ta.crossover(MidAVG, LongAVG) or LongOpen ? 1 : 0
+con_e = close > sl_S ? 1 : 0
+//
+// execute
+//
+var long_add_time = 0
+var short_add_time = 0
+if strategy.position_size == 0
+    if LongOpen
+        strategy.entry("Long Open" , strategy.long , comment= "Long Open " + str.tostring(close[0]), qty=strategy.initial_capital*(1/share)/close[0])
+        long_add_time := 0
+    if ShortOpen
+        strategy.entry("Short Open" , strategy.short , comment= "Short Open " + str.tostring(close[0]), qty=strategy.initial_capital*(1/share)/close[0])
+        short_add_time := 0
+
+if strategy.position_size > 0
+    if  AddPositionL == 1 and long_add_time < (share - 1)
+        strategy.order("Long Add" , strategy.long , comment= "Long Add " + str.tostring(close[0]), qty=strategy.initial_capital*(1/share)/close[0])
+        long_add_time += 1
+    if high[0] >= con_3 or high[0] >= Resistance
+        strategy.exit("Long Exit50%", comment= "Long Exit50%" + str.tostring(high[0]), qty_percent = 50, trail_offset = 2, stop = sl_L)
+
+    if (con_4 == 1) or (con_5 == 1)
+        strategy.close_all(comment="Close Long " + str.tostring(close[0]))
+        long_add_time := 0
+
+if strategy.position_size < 0
+    if AddPositionS == 1 and short_add_time < (share - 1)
+        strategy.order("Short Add" , strategy.short , comment= "Short Add " + str.tostring(close[0]), qty=strategy.initial_capital*(1/share)/close[0])
+        short_add_time += 1
+    if low[0] <= con_c or low[0] >= Support
+        strategy.exit("Short Exit50%", comment= "Short Exit50%" + str.tostring(low[0]), qty_percent = 50, trail_offset = -2, stop = sl_S)
+
+    if (con_d == 1) or (con_e == 1)
+        strategy.close_all(comment="Close Short " + str.tostring(close[0]))
+        short_add_time := 0
+
+plot(MidAVG, "MidAvg.", color = color.rgb(27, 150, 174), linewidth = 2)
+plot(LongAVG, "LongAvg.", color = color.orange, linewidth = 2)

@@ -1,0 +1,230 @@
+//@version=5
+// 建議在LDO/USDT的15分or 5分運行。拋磚引玉，歡迎各路大神
+// ©Myo_Pionex
+strategy(
+ title                  =   "Ｍyo_2",
+ shorttitle             =   "Myo_2",
+ overlay                =   true,
+ max_lines_count        =   500,
+ max_labels_count       =   500,
+ precision              =   3,
+ default_qty_type       =   strategy.cash,
+ commission_value       =   0.05,
+ commission_type        =   strategy.commission.percent,
+ slippage               =   0,
+ currency               =   currency.USDT,
+ default_qty_value      =   100,
+ initial_capital        =   100)
+
+//
+// var
+// BB
+BB_length = input.int(200, minval=1)
+BB_src = input(close, "Source")
+BB_mult = input.float(2.0, minval=0.001, maxval=50, title = "StdDev")
+BB_basis = ta.sma(BB_src, BB_length)
+BB_dev = BB_mult * ta.stdev(BB_src, BB_length)
+upper = BB_basis + BB_dev
+lower = BB_basis - BB_dev
+eBB_length = input.int(200, minval=1)
+eBB_mult = input.float(1.5, minval=0.001, maxval=50, title = "StdDev")
+eBB_basis = ta.sma(close, eBB_length)
+eBB_dev = eBB_mult * ta.stdev(close, eBB_length)
+e_upper = eBB_basis + eBB_dev
+e_lower = eBB_basis - eBB_dev
+fBB_length = input.int(200, minval=1)
+fBB_mult = input.float(2.5, minval=0.001, maxval=50, title = "StdDev")
+fBB_basis = ta.sma(close, fBB_length)
+fBB_dev = fBB_mult * ta.stdev(close, fBB_length)
+f_upper = fBB_basis + fBB_dev
+f_lower = fBB_basis - fBB_dev
+lowlenleft = input.int(6, "LowLenLeft", step = 1, group = "pivotlow")
+lowlenright = input.int(5, "LowLenRight", step = 1, group = "pivotlow")
+highlenleft = input.int(6, "HighLenLeft", step = 1, group = "pivothigh")
+highlenright = input.int(5, "HighLenRight", step = 1, group = "pivothigh")
+pivot_lookback = input.int(3, "Pivot Lookback", minval = 1, step = 1)
+pivot_lookback2 = input.int(1, "築底次數", minval = 1, step = 1)
+pivot_lookback3 = input.int(2, "FakeBreakOut", minval = 1, step = 1)
+pivotlow_o = ta.pivotlow(lowlenleft, lowlenright)
+pivothigh_o = ta.pivothigh(highlenleft, highlenright)
+pivotlow_cond = not na(pivotlow_o)
+pivotlow = 0.0
+pivotlow := pivotlow_cond ? pivotlow_o : pivotlow[1]
+pivothigh_cond = not na(pivothigh_o)
+pivothigh = 0.0
+pivothigh := pivothigh_cond ? pivothigh_o : pivothigh[1]
+LLlen = input.int(200, "LLlen", step = 100)
+HHlen = input.int(200, "HHLen", step = 100)
+RSI = ta.rsi(close, 14)
+RSI_MA = ta.sma(RSI, 14)
+rr_A = input.float(0.01, "觸發獲利A", step = 0.005, group = "ATR止盈設置")
+rr_B = input.float(0.05, "觸發獲利B", step = 0.005, group = "ATR止盈設置")
+rr_C = input.float(0.07, "觸發獲利C", step = 0.005, group = "ATR止盈設置")
+rt_A = input.float(0.015, "回撤百分比A", step = 0.005, group = "ATR止盈設置")
+rt_B = input.float(0.005, "回撤百分比B", step = 0.005, group = "ATR止盈設置")
+rt_C = input.float(0.005, "回撤百分比C", step = 0.005, group = "ATR止盈設置")
+ATR_l = input.int(24, "ATR長度", step = 5, group = "ATR設置")
+ATR = ta.atr(ATR_l)
+A = input.float(10, "A區ATR乘數", step = 2, group = "ATR設置")
+B = input.float(14, "B區ATR乘數", step = 2, group = "ATR設置")
+C = input.float(20, "C區ATR乘數", step = 2, group = "ATR設置")
+risk_ratio = input.float(0.002, "止損浮點", step = 0.001, group = "止損設置")
+fbo_len = input.int(10, "假突破回顧", step = 10)
+//
+// Condition
+concept_l = false
+concept_s = false
+LL = ta.lowest(low, LLlen)
+HH = ta.highest(high, HHlen)
+
+for i = 1 to pivot_lookback
+    if pivotlow[i] <= lower
+        concept_l := true
+
+for j = 1 to pivot_lookback
+    if pivothigh[j] >= upper
+        concept_s := true
+
+con1_l = close <= e_lower and close >= lower ? 1 : 0
+con2_l = false
+
+for m = 1 to pivot_lookback3
+    if close > ta.highest(LL, fbo_len)[m]
+        con2_l := true
+
+con11_l = false
+con22_l = close > f_lower and close < e_lower
+
+for k = 0 to pivot_lookback2
+    if ta.lowest(LL, LLlen)[k] > ta.lowest(LL, LLlen)[k+1]
+        con11_l := true
+
+con1_s = close >= e_upper and close <= upper ? 1 : 0
+con2_s = false
+
+for n = 1 to pivot_lookback3
+    if close < ta.lowest(HH, fbo_len)[n]
+        con2_s := true
+
+con3_s = RSI_MA >= 70 ? 1 : 0
+con11_s = false
+con22_s = close < f_upper and close > e_upper
+
+for l = 0 to pivot_lookback2
+    if ta.highest(HH, HHlen)[l] < ta.highest(HH, HHlen)[l+1]
+        con11_s := true
+
+LongEntry1 = false
+LongEntry2 = false
+ShortEntry1 = false
+ShortEntry2 = false
+
+var float EntryPrice = na
+var bool trailingStopTriggered_A = na
+var float trailingStopLevel_A = na
+var bool trailingStopTriggered_B = na
+var float trailingStopLevel_B = na
+var bool trailingStopTriggered_C = na
+var float trailingStopLevel_C = na
+var float ATR_A = na
+var float ATR_B = na
+var float ATR_C = na
+var float sl_l = na
+var float sl_s = na
+
+if con1_l >= 1 and con11_l
+    LongEntry1 := true
+if con2_l and concept_l and con22_l
+    LongEntry2 := true
+
+if con1_s >= 1 and con11_s
+    ShortEntry1 := true
+if con2_s and con3_s >= 1 and concept_s and con22_s
+    ShortEntry2 := true
+
+if strategy.position_size == 0
+    if LongEntry1
+        strategy.entry("Long", strategy.long, qty = strategy.initial_capital / close, comment = "數到1進場")
+        EntryPrice := close
+        ATR_A := EntryPrice + ATR * A
+        ATR_B := EntryPrice + ATR * B
+        ATR_C := EntryPrice + ATR * C
+    if LongEntry2
+        strategy.entry("Long", strategy.long, qty = strategy.initial_capital / close, comment = "假跌破")
+        EntryPrice := close
+        ATR_A := EntryPrice + ATR * A
+        ATR_B := EntryPrice + ATR * B
+        ATR_C := EntryPrice + ATR * C
+
+    if ShortEntry1
+        strategy.entry("Short", strategy.short, qty = strategy.initial_capital / close, comment = "數到1進場")
+        EntryPrice := close
+        ATR_A := EntryPrice - ATR * A
+        ATR_B := EntryPrice - ATR * B
+        ATR_C := EntryPrice - ATR * C
+    if ShortEntry2
+        strategy.entry("Short", strategy.short, qty = strategy.initial_capital / close, comment = "假突破")
+        EntryPrice := close
+        ATR_A := EntryPrice - ATR * A
+        ATR_B := EntryPrice - ATR * B
+        ATR_C := EntryPrice - ATR * C
+
+if strategy.position_size > 0 and na(EntryPrice) == false
+    if close >= ATR_A
+        if close > EntryPrice * (1 + rr_A)
+            trailingStopTriggered_A := true
+            trailingStopLevel_A := close[1] * (1 - rt_A)
+        if close <= trailingStopLevel_A
+            strategy.close_all("TP_A")
+            trailingStopTriggered_A := false
+            trailingStopLevel_A := na
+    if close >= ATR_B
+        if close > EntryPrice * (1 + rr_B)
+            trailingStopTriggered_B := true
+            trailingStopLevel_B := close[1] * (1 - rt_B)
+        if close <= trailingStopLevel_B
+            strategy.close_all("TP_B")
+            trailingStopTriggered_B := false
+            trailingStopLevel_B := na
+    if close >= ATR_C
+        if close > EntryPrice * (1 + rr_C)
+            trailingStopTriggered_C := true
+            trailingStopLevel_C := close[1] * (1 - rt_C)
+        if close <= trailingStopLevel_C
+            strategy.close_all("TP_C")
+            trailingStopTriggered_C := false
+            trailingStopLevel_C := na
+    if ta.crossunder(close, upper)
+        strategy.close_all("TP Long BB")
+    if close < LL[1] * (1 - risk_ratio)
+        strategy.close_all("SL Long")
+
+if strategy.position_size < 0 and na(EntryPrice) == false
+    if close <= ATR_A
+        if close <= EntryPrice * (1 - rr_A)
+            trailingStopTriggered_A := true
+            trailingStopLevel_A := close * (1 + rt_A)
+    if close >= trailingStopLevel_A
+        strategy.close_all("TP_A")
+        trailingStopTriggered_A := false
+        trailingStopLevel_A := na
+    if close <= ATR_B
+        if close <= EntryPrice * (1 - rr_B)
+            trailingStopTriggered_B := true
+            trailingStopLevel_B := close * (1 + rt_B)
+    if close >= trailingStopLevel_B
+        strategy.close_all("TP_B")
+        trailingStopTriggered_B := false
+        trailingStopLevel_B := na
+    if close <= ATR_C
+        if close <= EntryPrice * (1 - rr_C)
+            trailingStopTriggered_C := true
+            trailingStopLevel_C := close * (1 + rt_C)
+    if close >= trailingStopLevel_C
+        strategy.close_all("TP_C")
+        trailingStopTriggered_C := false
+        trailingStopLevel_C := na
+    if ta.crossover(close, lower)
+        strategy.close_all("TP Short BB")
+    if close > HH[1] * (1 + risk_ratio)
+        strategy.close_all("SL Short")

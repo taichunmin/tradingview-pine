@@ -1,0 +1,83 @@
+//@version=5
+// 追漲殺跌策略：沒啥好說，追漲殺跌，順勢交易。丟去回測就知道了。建議運行週期：4小時
+strategy("chasing ups and downs", overlay=true, initial_capital = 100, currency = currency.USDT)
+//
+// var
+length = input.int(32, minval=1)
+src = input(close, title="Source")
+mult = input.float(1.0, minval=0.001, maxval=50, title="StdDev")
+basis = ta.sma(src, length)
+dev = mult * ta.stdev(src, length)
+upper = basis + dev
+lower = basis - dev
+vol_ma = ta.sma(volume, 14)
+LongTermSMA = ta.sma(close, 800)
+vrsi = ta.rsi(close, 14)
+SMA_RSI = ta.sma(vrsi, 14)
+RSI_slope_up = SMA_RSI[0] > SMA_RSI[1]
+RSI_slope_dn = SMA_RSI[0] < SMA_RSI[1]
+//
+// Long Con
+LongCon1 = close[0] >= close[1] and close [1] >= close[2] ? 1 : 0
+LongCon2 = close[0] > ta.sma(close, 5) and high[1] > ta.sma(close, 10) and high[1] > ta.sma(close, 20) ? 1 : 0
+LongCon3 = close[0] >= upper and volume[0] >= vol_ma ? 1 : 0
+CloseLong1 = close[0] < ta.pivotlow(1, 5) ? 1 : 0
+CloseLong11 = ta.crossunder(close[0], ta.sma(close, 10)) and RSI_slope_dn ? 1 : 0
+CloseLong2 = high[0] >= ta.highest(high, 200) and ta.rsi(close, 14) >= 80 ? 1 : 0
+CloseLong4 = ta.crossunder(close, upper) and ta.rsi(close, 14) >= 80 ? 1 : 0
+CloseLong5 = close[0] < ta.pivothigh(5, 1) ? 1 : 0
+//
+// Short Con
+ShortCon1 = close[0] <= close[1] and close[1] <= close[2] ? 1 : 0
+ShortCon2 = close[0] < ta.sma(close, 5) and low[1] < ta.sma(close, 10) and low[1] < ta.sma(close, 20) ? 1 : 0
+ShortCon3 = close[0] <= lower and volume[0] >= vol_ma ? 1 : 0
+CloseShort1 = close[0] > ta.pivothigh(1, 5) ? 1 : 0
+CloseShort11 = ta.crossover(close[0], ta.sma(close, 10)) and RSI_slope_up ? 1 : 0
+CloseShort2 = low[0] <= ta.lowest(low, 200) and ta.rsi(close, 14) <= 20 ? 1 : 0
+CloseShort4 = ta.crossover(close, lower) and ta.rsi(close, 14) <= 20 ? 1 : 0
+CloseShort5 = close[0] > ta.pivotlow(5, 1) ? 1 : 0
+//
+// Entry & Close
+LongEntry = false
+ShortEntry = false
+
+if LongCon1 + LongCon2 + LongCon3 >= 3
+    LongEntry := true
+
+if ShortCon1 + ShortCon2 + ShortCon3 >= 3
+    ShortEntry := true
+
+TPLong = false
+TPShort = false
+SLLong = false
+SLShort = false
+
+if CloseLong1 >= 1
+    SLLong := true
+if CloseShort1 >= 1
+    SLShort := true
+if CloseLong2 + CloseLong4 >= 1
+    TPLong := true
+if CloseShort2 + CloseShort4 >= 1
+    TPShort := true
+
+
+// Exacute
+if strategy.position_size == 0
+    if LongEntry
+        strategy.entry("Long", strategy.long, qty = strategy.initial_capital/close[0])
+
+    if ShortEntry
+        strategy.entry("Short", strategy.short, qty = strategy.initial_capital/close[0])
+
+if strategy.position_size > 0
+    if SLLong or ShortEntry
+        strategy.close_all("Long Stop Loss")
+    if TPLong
+        strategy.close_all("Long Take Profit")
+
+if strategy.position_size < 0
+    if SLShort or LongEntry
+        strategy.close_all("Short Stop Loss")
+    if TPShort
+        strategy.close_all("Short Take Profit")

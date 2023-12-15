@@ -1,4 +1,5 @@
 //@version=5
+// 沒有賺錢
 strategy("RSI金叉死叉-VOL過濾-20231212", overlay=true, default_qty_type = strategy.percent_of_equity, default_qty_value = 20)
 
 // vol
