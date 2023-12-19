@@ -1,0 +1,37 @@
+//@version=5
+
+// 2023/12/19 模仿 shiauyi 的策略，使用 3 個 Supertrend 當作進場條件，但進場單數過少，而且其中兩個 Supertrend 好像沒效果
+
+strategy("Supertrend x3 20231218", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+barsSinceLastEntry() =>
+    strategy.opentrades > 0 ? bar_index - strategy.opentrades.entry_bar_index(strategy.opentrades - 1) : na
+
+atrPeriod1 = input(8, "ATR Length (1)", group = "Supertrend 1")
+factor1 = input(1.0, "Factor (1)", group = "Supertrend 1")
+
+atrPeriod2 = input(9, "ATR Length (2)", group = "Supertrend 2")
+factor2 = input(2.0, "Factor (2)", group = "Supertrend 2")
+
+atrPeriod3 = input(10, "ATR Length (3)", group = "Supertrend 3")
+factor3 = input(3.0, "Factor (3)", group = "Supertrend 3")
+
+[trend1, dir1] = ta.supertrend(factor1, atrPeriod1)
+[trend2, dir2] = ta.supertrend(factor2, atrPeriod2)
+[trend3, dir3] = ta.supertrend(factor3, atrPeriod3)
+
+dirSum = dir1 + dir2 + dir3
+longCondition = ta.change(dirSum) != 0 and dirSum == -3
+
+if strategy.position_size == 0 and longCondition
+    strategy.entry("long", strategy.long)
+
+// lowest
+lowest = ta.lowest(10)
+longStop = trend3
+longStopPrev = na(longStop[1]) or na(barsSinceLastEntry()) ? lowest : longStop[1]
+longStop := math.max(longStopPrev, longStop)
+plot(strategy.position_size > 0 ? longStop : na, color = color.red, style = plot.style_linebr)
+
+if strategy.position_size > 0
+    strategy.exit("exit long", "long", stop = longStop)
