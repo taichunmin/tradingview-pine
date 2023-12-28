@@ -32,9 +32,8 @@ fnSupertrend(atrPeriod, factor) =>
     [trend, dir] = ta.supertrend(factor, atrPeriod)
     isEntry = ta.crossunder(dir, 0)
     lowest = ta.lowest(atrPeriod)
-    longStop = dir == -1 ? trend : lowest
-    longStopPrev = isEntry or na(longStop[1]) ? lowest : longStop[1]
-    longStop := math.max(longStopPrev, longStop)
+    var float longStop = lowest
+    longStop := math.max(isEntry ? lowest : longStop, trend)
     [isEntry, longStop]
 
 fnIsOpened(entryId) =>
