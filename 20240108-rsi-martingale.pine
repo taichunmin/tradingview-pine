@@ -1,0 +1,51 @@
+//@version=5
+strategy("RSI7現貨追蹤馬丁策略", overlay=true, margin_long=100, margin_short=100)
+
+nextQtyScale = input.float(title="加倉倍數", group="加倉", minval=1.0, maxval=2.0, step=0.1, defval=1.5)
+nextCntMax = input.int(title="加倉次數", group="加倉", minval=1, maxval=15, step=1, defval=8)
+nextPriceRatio = input.float(title="加倉跌幅 %", group="加倉", minval=0.2, maxval=15.0, step=0.1, defval=2.0)
+nextPriceTrailing = input.float(title="加倉回撤 %", group="加倉", minval=0.1, maxval=15.0, step=0.1, defval=1.0)
+takeProfitPerc = input.float(title="止盈漲幅 %", group="止盈", minval=0.2, step=0.1, defval=2.0)
+takeProfitTrailing = input.float(title="止盈回撤 %", group="止盈", minval=0.1, step=0.1, defval=1.0)
+
+// debug
+var debugLabel = label.new(bar_index, na, na, color = color(na), textcolor = color.orange)
+
+// 計算進場金額
+var entryQtys = array.new_float(nextCntMax + 1, 1.0) // 進場投資額權重
+for i = 2 to nextCntMax
+    array.set(entryQtys, i, array.get(entryQtys, i - 1) * nextQtyScale)
+var float entryQtySum = array.sum(entryQtys) // 進場投資額權重總和
+
+// if barstate.islast or last_bar_index != bar_index
+//     label.set_xy(debugLabel, bar_index + 2, hl2[1])
+//     label.set_text(debugLabel, str.tostring(entryQtySum, "entryQtySum = #.###"))
+
+rsi7 = ta.rsi(close, 7)
+var int rsiSignalBarIndex = na
+if ta.crossunder(rsi7, 30)
+    rsiSignalBarIndex := bar_index
+rsiColor = rsi7 <= 30 ? color.rgb(0, 255, 0, 75) : color.rgb(0, 0, 0, 100)
+bgcolor(rsiColor)
+
+opentrades = strategy.opentrades
+nextEntryQty = opentrades > nextCntMax ? 0.0 : (array.get(entryQtys, opentrades) / entryQtySum * 100.0) // 派網的投資額以 100 USD 為基準
+prevEntryBarIndex = opentrades > 0 ? strategy.opentrades.entry_bar_index(opentrades - 1) : rsiSignalBarIndex
+trailingLowest = ta.lowest(bar_index - prevEntryBarIndex)
+prevEntryPrice = strategy.opentrades.entry_price(opentrades - 1)
+
+var int trailingState = 0 // 0: 未觸發, 1: 已觸發
+if (opentrades == 0 ? ta.crossunder(rsi7, 30) : ta.crossunder(close, prevEntryPrice * (1.0 - nextPriceTrailing / 100.0)))
+    trailingState := 1
+
+if barstate.islast or last_bar_index != bar_index
+    label.set_xy(debugLabel, bar_index + 2, hl2[1])
+    label.set_text(debugLabel, str.format("prevEntryPrice = {0}\nnextEntryQty = {1}", prevEntryPrice, nextEntryQty))
+
+// longCondition = ta.crossover(ta.sma(close, 14), ta.sma(close, 28))
+// if (longCondition)
+//     strategy.entry("My Long Entry Id", strategy.long)
+
+// shortCondition = ta.crossunder(ta.sma(close, 14), ta.sma(close, 28))
+// if (shortCondition)
+//     strategy.entry("My Short Entry Id", strategy.short)
